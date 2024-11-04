@@ -1,0 +1,87 @@
+<form version="1.1" theme="dark">
+  <label>Data Usage by Index</label>
+  <fieldset submitButton="false"></fieldset>
+  <row>
+    <panel>
+      <title>Current Indexes</title>
+      <table>
+        <search>
+          <query>| rest splunk_server=* /services/data/indexes
+| where disabled=0
+| rename title as index_active
+```narrow down```
+| fields index_active currentDBSizeMB frozenTimePeriodInSecs lastInitTime maxTime minTime
+| sort -currentDBSizeMB</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">10</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <input type="dropdown" token="selected_index">
+        <label>Selected Index</label>
+        <fieldForLabel>index_active</fieldForLabel>
+        <fieldForValue>index_active</fieldForValue>
+        <search>
+          <query>| rest splunk_server=* /services/data/indexes
+| where disabled=0
+| fields title
+| rename title as index_active</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+      </input>
+      <table>
+        <search>
+          <query>index=_internal sourcetype="search_logs" "IndexScopedSearch is called for index ="
+| rex field=_raw "for index = (?&lt;index_list&gt;\S+),"
+| where NOT like(index_list, "%&lt;%&gt;%")
+
+| rex field=_raw "et = (?&lt;et&gt;[\d]+)"
+| eval lookback=_time-et
+| eval lookback_days=round(lookback/60/60/24,0)
+| where index_list="$selected_index$"
+| stats count(index_list) AS accessed_count last(_time) As last_accessed max(lookback_days) as lookback_days_max perc90(lookback_days) as lookback_days_perc90 by index_list | eval lookback_days_perc90=round(lookback_days_perc90,0)
+| eval last_accessed=round(last_accessed,0)
+| eval last_accessed=strftime(last_accessed,"%m/%d/%y %H:%M:%S")</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <title>Sourcetypes Searched</title>
+        <search>
+          <query>index=_internal sourcetype="search_logs" sourcetype "Searching index:"
+| rex max_match=999 field=_raw "(?&lt;!NOT) (?:sourcetype)::(?&lt;sourcetypes_searched&gt;[^\s]+)"
+| rex max_match=999 field=_raw "(?&lt;!NOT) (?:source)::(?&lt;source_searched&gt;[^\s]+)"
+| rex field=_raw "Searching index:(?&lt;index_searched&gt;[^\s]+)"
+
+| mvexpand index_searched
+| search index_searched=$selected_index$
+| stats c by sourcetypes_searched index_searched
+```| table index_searched sourcetypes_searched source_searched```</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+  </row>
+</form>

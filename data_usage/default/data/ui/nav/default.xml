@@ -1,0 +1,5 @@
+<nav search_view="search" color="#5CC05C">
+<view name="data_usage" default="true" />
+  <view name="index_usage_reporting" />
+  <view name="search"  />
+</nav>
